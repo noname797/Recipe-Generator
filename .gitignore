@@ -1,0 +1,7 @@
+*__pycache__*
+*__pycache__*
+.env
+.venv/
+.pytest_cache/
+.flask_session/
+*.db

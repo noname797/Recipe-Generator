@@ -28,7 +28,7 @@ class IngredientInputOutput(BaseModel):
         default=["None"], description="List of user-provided allergies."
     )
     cuisine: Optional[str] = Field(
-        default=["Any"], description="User-provided cuisine type."
+        default="Any", description="User-provided cuisine type."
     )
     flavor_profiles: Optional[List[str]] = Field(
         default=["Any"], description="List of user-provided flavor profiles."

@@ -6,141 +6,1606 @@
     <title>Recipe Generator Assistant</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        :root {
+            --primary: #8e24aa;
+            --primary-dark: #5e17a3;
+            --primary-light: #f3e5f5;
+            --accent: #ff7043;
+            --bg: #f4f2fb;
+            --surface: #ffffff;
+            --text: #2d2a3a;
+            --muted: #786f8c;
+            --border: #e6ddf2;
+            --success: #2e7d32;
+            --shadow: 0 4px 24px rgba(94, 23, 163, 0.10);
+        }
+        [data-theme="dark"] {
+            --primary: #ce93d8;
+            --primary-dark: #b388eb;
+            --primary-light: #2c2140;
+            --bg: #17131f;
+            --surface: #221b30;
+            --text: #ece6f7;
+            --muted: #a898bf;
+            --border: #362a4a;
+            --shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+        }
+        * { box-sizing: border-box; }
+        html, body { height: 100%; }
         body {
-            font-family: 'Segoe UI', Arial, sans-serif;
-            background: #f7f7fa;
+            font-family: 'Segoe UI', system-ui, Arial, sans-serif;
+            background: radial-gradient(circle at top left, var(--primary-light), var(--bg) 55%);
+            color: var(--text);
             margin: 0;
             padding: 0;
+            transition: background 0.3s, color 0.3s;
         }
-        .container {
-            max-width: 700px;
-            margin: 40px auto;
-            background: #fff;
-            border-radius: 12px;
-            box-shadow: 0 2px 16px rgba(0,0,0,0.08);
-            padding: 32px 24px 24px 24px;
-        }
-        h1 {
-            text-align: center;
-            color: #3a3a4a;
-            margin-bottom: 16px;
-        }
-        #chat {
-            min-height: 320px;
-            max-height: 400px;
-            overflow-y: auto;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            padding: 16px;
-            background: #fafbfc;
-            margin-bottom: 18px;
-        }
-        .message {
-            margin-bottom: 16px;
+        .app-shell {
+            max-width: 900px;
+            margin: 0 auto;
+            min-height: 100vh;
             display: flex;
-            align-items: flex-start;
+            flex-direction: column;
+            padding: 20px 16px 24px;
         }
+        header.top-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .brand-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 1.3rem;
+            box-shadow: 0 4px 12px rgba(142, 36, 170, 0.35);
+        }
+        .brand h1 {
+            margin: 0;
+            font-size: 1.3rem;
+            line-height: 1.1;
+        }
+        .brand .subtitle {
+            margin: 2px 0 0;
+            font-size: 0.8rem;
+            color: var(--muted);
+        }
+        .top-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .icon-btn {
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.15s ease, background 0.2s;
+            font-size: 0.95rem;
+        }
+        .icon-btn:hover { background: var(--primary-light); transform: translateY(-1px); }
+        .icon-btn:active { transform: translateY(0); }
+
+        .card-shell {
+            background: var(--surface);
+            border-radius: 20px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        #chat {
+            flex: 1;
+            min-height: 380px;
+            max-height: 62vh;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            scroll-behavior: smooth;
+        }
+        #chat::-webkit-scrollbar { width: 8px; }
+        #chat::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; }
+
+        .message {
+            margin-bottom: 14px;
+            display: flex;
+            align-items: flex-end;
+            gap: 8px;
+            max-width: 100%;
+            animation: rise 0.28s ease;
+        }
+        @keyframes rise {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .message.user { justify-content: flex-end; }
+        .message.assistant { justify-content: flex-start; }
+        .avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;
+            color: #fff;
+        }
+        .message.assistant .avatar { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); }
+        .message.user .avatar { background: linear-gradient(135deg, #26a69a, #00838f); order: 2; }
+
         .message.user .bubble {
-            background: #e0f7fa;
-            color: #00796b;
-            margin-left: auto;
+            background: linear-gradient(135deg, #26c6da, #00acc1);
+            color: #fff;
+            border-bottom-right-radius: 4px;
         }
         .message.assistant .bubble {
-            background: #ede7f6;
-            color: #4527a0;
-            margin-right: auto;
+            background: var(--primary-light);
+            color: var(--text);
+            border-bottom-left-radius: 4px;
         }
         .bubble {
-            padding: 12px 18px;
+            padding: 12px 16px;
             border-radius: 18px;
-            max-width: 80%;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+            max-width: 78%;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+            white-space: pre-wrap;
+            line-height: 1.45;
+            font-size: 0.96rem;
+            word-wrap: break-word;
         }
-        form {
-            display: flex;
-            gap: 10px;
+        .message.assistant .bubble.wide { max-width: 100%; }
+        .timestamp {
+            font-size: 0.68rem;
+            color: var(--muted);
+            margin-top: 4px;
+            opacity: 0.8;
         }
-        input[type="text"] {
-            flex: 1;
-            padding: 12px;
-            border-radius: 8px;
-            border: 1px solid #ccc;
-            font-size: 1rem;
+        .message.user .timestamp { text-align: right; }
+
+        .typing-dots {
+            display: inline-flex;
+            gap: 4px;
+            align-items: center;
+            padding: 4px 0;
         }
-        button {
-            background: #4527a0;
-            color: #fff;
-            border: none;
-            border-radius: 8px;
-            padding: 12px 20px;
-            font-size: 1rem;
-            cursor: pointer;
-            transition: background 0.2s;
+        .typing-dots span {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--primary);
+            opacity: 0.6;
+            animation: bounce 1.2s infinite ease-in-out;
         }
-        button:hover {
-            background: #6a1b9a;
+        .typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+        .typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+        @keyframes bounce {
+            0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+            30% { transform: translateY(-5px); opacity: 1; }
         }
-        .recipe-card {
-            background: #f3e5f5;
-            border-radius: 10px;
+
+        .welcome-card {
+            border: 1px dashed var(--border);
+            border-radius: 14px;
             padding: 16px;
+            margin-bottom: 12px;
+            color: var(--muted);
+            font-size: 0.9rem;
+            background: var(--primary-light);
+        }
+        .welcome-card strong { color: var(--text); }
+        .suggestion-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
             margin-top: 10px;
         }
+        .chip {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--primary-dark);
+            border-radius: 20px;
+            padding: 6px 14px;
+            font-size: 0.82rem;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .chip:hover {
+            background: var(--primary);
+            color: #fff;
+            border-color: var(--primary);
+            transform: translateY(-1px);
+        }
+
+        form#chat-form {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+            padding: 14px 16px;
+            border-top: 1px solid var(--border);
+            background: var(--surface);
+        }
+        .input-wrap {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 4px 6px 4px 14px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .input-wrap:focus-within {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(142, 36, 170, 0.15);
+        }
+        textarea#user-input {
+            flex: 1;
+            resize: none;
+            border: none;
+            background: transparent;
+            outline: none;
+            font-size: 0.95rem;
+            font-family: inherit;
+            color: var(--text);
+            padding: 10px 4px;
+            max-height: 120px;
+            line-height: 1.4;
+        }
+        .char-counter {
+            font-size: 0.68rem;
+            color: var(--muted);
+            padding: 0 6px;
+            white-space: nowrap;
+        }
+        button#send-btn {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: #fff;
+            border: none;
+            border-radius: 14px;
+            width: 48px;
+            height: 48px;
+            font-size: 1.05rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.15s, box-shadow 0.15s, opacity 0.2s;
+            box-shadow: 0 3px 10px rgba(94, 23, 163, 0.3);
+            flex-shrink: 0;
+        }
+        button#send-btn:hover:not(:disabled) { transform: translateY(-2px); }
+        button#send-btn:active:not(:disabled) { transform: translateY(0); }
+        button#send-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+        footer.hint {
+            text-align: center;
+            font-size: 0.75rem;
+            color: var(--muted);
+            margin-top: 10px;
+        }
+
+        /* --- Recipe cards --- */
+        .recipe-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 14px;
+            margin-top: 4px;
+            width: 100%;
+        }
+        .recipe-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 16px;
+            box-shadow: 0 1px 6px rgba(80, 30, 120, 0.08);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            transition: transform 0.18s ease, box-shadow 0.18s ease;
+        }
+        .recipe-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 22px rgba(94, 23, 163, 0.18);
+            border-color: var(--primary);
+        }
+        .recipe-card .card-number {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: #fff;
+            font-size: 0.85rem;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+        .recipe-card .card-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
         .recipe-card h3 {
-            margin-top: 0;
+            margin: 0;
+            color: var(--primary-dark);
+            font-size: 1.05rem;
+        }
+        [data-theme="dark"] .recipe-card h3 { color: var(--primary); }
+        .recipe-card .card-description {
+            color: var(--muted);
+            font-size: 0.9rem;
+            margin: 0;
+        }
+        .recipe-card details {
+            font-size: 0.88rem;
+            color: var(--text);
+            border-top: 1px dashed var(--border);
+            padding-top: 6px;
+        }
+        .recipe-card summary {
+            cursor: pointer;
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 4px;
+            list-style: none;
+        }
+        .recipe-card summary::-webkit-details-marker { display: none; }
+        .recipe-card summary::before {
+            content: '▸';
+            display: inline-block;
+            margin-right: 6px;
+            transition: transform 0.15s;
+        }
+        .recipe-card details[open] summary::before { transform: rotate(90deg); }
+        .recipe-card ul, .recipe-card ol {
+            margin: 4px 0 4px 18px;
+            padding: 0;
+        }
+        .recipe-card .meta-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            font-size: 0.78rem;
+            color: var(--muted);
+        }
+        .recipe-card .meta-pill {
+            background: var(--primary-light);
+            border-radius: 12px;
+            padding: 3px 10px;
+        }
+        .recipe-card .tag {
+            background: var(--primary-light);
+            color: var(--primary-dark);
+            border-radius: 10px;
+            padding: 2px 9px;
+            font-size: 0.72rem;
+            font-weight: 600;
+        }
+        .recipe-card .nutrition-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
+            gap: 6px;
+            font-size: 0.8rem;
+        }
+        .recipe-card .nutrition-item {
+            background: var(--bg);
+            border-radius: 8px;
+            padding: 5px 6px;
+            text-align: center;
+        }
+        .recipe-card .nutrition-item .label {
+            display: block;
+            color: var(--muted);
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+        .recipe-card .nutrition-item .value {
+            display: block;
+            font-weight: 700;
+            color: var(--primary-dark);
+        }
+        [data-theme="dark"] .recipe-card .nutrition-item .value { color: var(--primary); }
+        .recipe-card .select-btn {
+            align-self: stretch;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-size: 0.86rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 4px;
+            transition: opacity 0.15s, transform 0.15s;
+        }
+        .recipe-card .select-btn:hover { opacity: 0.92; transform: translateY(-1px); }
+        .recipe-card .select-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        .final-recipe-card {
+            background: linear-gradient(135deg, var(--primary-light), var(--bg));
+            border-radius: 16px;
+            padding: 20px;
+            margin-top: 6px;
+            border: 1px solid var(--border);
+            position: relative;
+            width: 100%;
+        }
+        .final-recipe-card .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--success);
+            color: #fff;
+            font-size: 0.72rem;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 20px;
+            margin-bottom: 10px;
+        }
+        .final-recipe-card h3 {
+            margin: 0 0 8px 0;
+            color: var(--primary-dark);
+            font-size: 1.25rem;
+        }
+        [data-theme="dark"] .final-recipe-card h3 { color: var(--primary); }
+        .final-recipe-card .card-description {
+            margin: 0 0 8px 0;
+            color: var(--muted);
+        }
+        .final-recipe-card ol, .final-recipe-card ul {
+            margin: 4px 0 4px 18px;
+            padding: 0;
+        }
+        .final-recipe-card .final-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 14px;
+        }
+        .final-recipe-card .final-actions button {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text);
+            border-radius: 10px;
+            padding: 8px 14px;
+            font-size: 0.82rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: background 0.15s;
+        }
+        .final-recipe-card .final-actions button:hover { background: var(--primary-light); }
+
+        @media (max-width: 560px) {
+            .bubble { max-width: 88%; }
+            .brand h1 { font-size: 1.05rem; }
+            .brand .subtitle { display: none; }
+            .stepper .step-label { display: none; }
+        }
+
+        /* --- Progress stepper --- */
+        .stepper {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 12px 18px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+            overflow-x: auto;
+        }
+        .stepper .step {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+        .stepper .step-dot {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: var(--bg);
+            border: 2px solid var(--border);
+            color: var(--muted);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.68rem;
+            font-weight: 700;
+            transition: all 0.25s;
+            flex-shrink: 0;
+        }
+        .stepper .step-label {
+            font-size: 0.72rem;
+            color: var(--muted);
+            white-space: nowrap;
+            transition: color 0.25s;
+        }
+        .stepper .step.active .step-dot {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            border-color: var(--primary);
+            color: #fff;
+            box-shadow: 0 0 0 4px rgba(142,36,170,0.15);
+        }
+        .stepper .step.active .step-label { color: var(--primary-dark); font-weight: 700; }
+        [data-theme="dark"] .stepper .step.active .step-label { color: var(--primary); }
+        .stepper .step.done .step-dot {
+            background: var(--success);
+            border-color: var(--success);
+            color: #fff;
+        }
+        .stepper .step.done .step-label { color: var(--success); }
+        .stepper .connector {
+            width: 16px;
+            height: 2px;
+            background: var(--border);
+            flex-shrink: 0;
+            transition: background 0.25s;
+        }
+        .stepper .connector.done { background: var(--success); }
+
+        /* --- Chat area wrapper for scroll button --- */
+        .chat-wrap { position: relative; flex: 1; display: flex; min-height: 0; }
+        .chat-wrap #chat { flex: 1; }
+        .scroll-bottom-btn {
+            position: absolute;
+            right: 18px;
+            bottom: 14px;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--primary-dark);
+            box-shadow: var(--shadow);
+            cursor: pointer;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.95rem;
+            z-index: 5;
+            transition: transform 0.15s;
+        }
+        .scroll-bottom-btn.show { display: flex; }
+        .scroll-bottom-btn:hover { transform: translateY(-2px); }
+        .scroll-bottom-btn .unread-badge {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            background: var(--accent);
+            color: #fff;
+            font-size: 0.62rem;
+            font-weight: 700;
+            border-radius: 10px;
+            padding: 1px 5px;
+            min-width: 16px;
+            text-align: center;
+        }
+
+        /* --- Quick replies (contextual chips shown after assistant msgs) --- */
+        .quick-replies {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 2px 0 14px 40px;
+            animation: rise 0.28s ease;
+        }
+        .quick-replies .chip { font-size: 0.8rem; }
+
+        /* --- Message hover actions ---
+           Use display:none (not just opacity:0) so these hidden button
+           labels are removed from layout AND excluded from text selection.
+           opacity:0 alone still keeps text selectable/copyable, which made
+           "Copy"/"Retry" show up as stray extra lines when a user selected
+           or copied the conversation. */
+        .msg-col { position: relative; }
+        .msg-actions {
+            display: none;
+            gap: 4px;
+            margin-top: 3px;
+        }
+        .message:hover .msg-actions,
+        .message:focus-within .msg-actions {
+            display: flex;
+        }
+        .msg-actions button {
+            background: none;
+            border: none;
+            color: var(--muted);
+            cursor: pointer;
+            font-size: 0.72rem;
+            padding: 2px 5px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            gap: 3px;
+        }
+        .msg-actions button:hover { background: var(--primary-light); color: var(--primary-dark); }
+        .msg-actions .retry-btn { color: var(--accent); }
+
+        .bubble.error-bubble {
+            border: 1px solid #e57373;
+            background: rgba(229,115,115,0.1) !important;
+        }
+
+        /* --- Stop button (shown while sending) --- */
+        button#stop-btn {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--accent);
+            border-radius: 14px;
+            width: 48px;
+            height: 48px;
+            font-size: 1.05rem;
+            cursor: pointer;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        button#stop-btn.show { display: flex; }
+
+        /* --- Toasts --- */
+        #toast-container {
+            position: fixed;
+            top: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 200;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            align-items: center;
+            pointer-events: none;
+        }
+        .toast {
+            background: var(--text);
+            color: var(--surface);
+            padding: 10px 18px;
+            border-radius: 10px;
+            font-size: 0.85rem;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            animation: toast-in 0.25s ease;
+            pointer-events: auto;
+        }
+        .toast.error { background: #c62828; color: #fff; }
+        .toast.success { background: var(--success); color: #fff; }
+        @keyframes toast-in {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .toast.fade-out { animation: toast-out 0.25s ease forwards; }
+        @keyframes toast-out { to { opacity: 0; transform: translateY(-10px); } }
+
+        /* --- Confirm modal --- */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.45);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 300;
+        }
+        .modal-overlay.show { display: flex; }
+        .modal-box {
+            background: var(--surface);
+            border-radius: 16px;
+            padding: 22px;
+            max-width: 340px;
+            width: 90%;
+            box-shadow: var(--shadow);
+            text-align: center;
+            animation: rise 0.2s ease;
+        }
+        .modal-box h3 { margin: 0 0 8px; font-size: 1.05rem; }
+        .modal-box p { margin: 0 0 18px; color: var(--muted); font-size: 0.88rem; }
+        .modal-actions { display: flex; gap: 10px; justify-content: center; }
+        .modal-actions button {
+            border-radius: 10px;
+            padding: 9px 18px;
+            font-size: 0.86rem;
+            cursor: pointer;
+            border: 1px solid var(--border);
+            background: var(--bg);
+            color: var(--text);
+        }
+        .modal-actions button.confirm {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: #fff;
+            border: none;
+        }
+
+        /* Connection status dot */
+        .conn-status {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.68rem;
+            color: var(--muted);
+            margin-right: 4px;
+        }
+        .conn-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); }
+        .conn-dot.offline { background: #c62828; }
+
+        kbd {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-bottom-width: 2px;
+            border-radius: 6px;
+            padding: 2px 7px;
+            font-size: 0.78rem;
+            font-family: inherit;
+            color: var(--primary-dark);
+        }
+        [data-theme="dark"] kbd { color: var(--primary); }
+
+        /* --- Reaction buttons on assistant messages --- */
+        .msg-actions button.reacted { color: var(--primary-dark); }
+        [data-theme="dark"] .msg-actions button.reacted { color: var(--primary); }
+
+        /* --- Rich text inside assistant bubbles --- */
+        .bubble strong { font-weight: 700; }
+        .bubble em { font-style: italic; }
+        .bubble a { color: inherit; text-decoration: underline; }
+        .bubble ul.md-list { margin: 6px 0 0 18px; padding: 0; }
+        .bubble ul.md-list li { margin-bottom: 2px; }
+
+        /* --- Dynamic "thinking" status line under typing dots --- */
+        .typing-status {
+            font-size: 0.78rem;
+            color: var(--muted);
+            margin-top: 2px;
+            transition: opacity 0.2s;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1><i class="fa-solid fa-utensils"></i> Recipe Generator Assistant</h1>
-        <div id="chat"></div>
-        <form id="chat-form">
-            <input type="text" id="user-input" placeholder="Type your ingredients, preferences, or questions..." autocomplete="off" required />
-            <button type="submit"><i class="fa-solid fa-paper-plane"></i></button>
-        </form>
+    <div id="toast-container"></div>
+    <div class="modal-overlay" id="confirm-modal">
+        <div class="modal-box">
+            <h3>Start a new conversation?</h3>
+            <p>Your current progress will be lost. This can't be undone.</p>
+            <div class="modal-actions">
+                <button type="button" id="modal-cancel">Cancel</button>
+                <button type="button" id="modal-confirm" class="confirm">Start Over</button>
+            </div>
+        </div>
+    </div>
+    <div class="modal-overlay" id="shortcuts-modal">
+        <div class="modal-box" style="max-width: 380px; text-align: left;">
+            <h3 style="text-align:center;">⌨️ Keyboard shortcuts</h3>
+            <ul style="list-style:none; padding:0; margin:0 0 18px; font-size:0.86rem; color:var(--text); display:flex; flex-direction:column; gap:8px;">
+                <li><kbd>Enter</kbd> &mdash; Send message</li>
+                <li><kbd>Shift</kbd> + <kbd>Enter</kbd> &mdash; New line</li>
+                <li><kbd>/</kbd> &mdash; Focus the message box</li>
+                <li><kbd>Esc</kbd> &mdash; Clear the message box</li>
+                <li><kbd>&uarr;</kbd> &mdash; Recall your last message</li>
+            </ul>
+            <div class="modal-actions">
+                <button type="button" id="shortcuts-close" class="confirm">Got it</button>
+            </div>
+        </div>
+    </div>
+    <div class="app-shell">
+        <header class="top-bar">
+            <div class="brand">
+                <div class="brand-icon"><i class="fa-solid fa-utensils"></i></div>
+                <div>
+                    <h1>Recipe Generator Assistant</h1>
+                    <p class="subtitle">Your AI sous-chef for ingredient-based recipes</p>
+                </div>
+            </div>
+            <div class="top-actions">
+                <span class="conn-status"><span class="conn-dot" id="conn-dot"></span><span id="conn-text">Online</span></span>
+                <button class="icon-btn" id="shortcuts-btn" title="Keyboard shortcuts" aria-label="Keyboard shortcuts" type="button">
+                    <i class="fa-regular fa-keyboard"></i>
+                </button>
+                <button class="icon-btn" id="theme-toggle" title="Toggle dark mode" aria-label="Toggle dark mode" type="button">
+                    <i class="fa-solid fa-moon"></i>
+                </button>
+                <button class="icon-btn" id="restart-btn" title="Start over" aria-label="Start over" type="button">
+                    <i class="fa-solid fa-rotate-right"></i>
+                </button>
+            </div>
+        </header>
+
+        <div class="card-shell">
+            <div class="stepper" id="stepper"></div>
+            <div class="chat-wrap">
+                <div id="chat" role="log" aria-live="polite" aria-relevant="additions" aria-label="Conversation with Recipe Generator Assistant"></div>
+                <button class="scroll-bottom-btn" id="scroll-bottom-btn" type="button" title="Scroll to latest">
+                    <i class="fa-solid fa-arrow-down"></i>
+                    <span class="unread-badge" id="unread-badge" style="display:none;">0</span>
+                </button>
+            </div>
+            <form id="chat-form">
+                <div class="input-wrap">
+                    <textarea id="user-input" rows="1" placeholder="Type your ingredients, preferences, or questions..." autocomplete="off" required></textarea>
+                    <span class="char-counter" id="char-counter">0/4000</span>
+                </div>
+                <button type="button" id="stop-btn" title="Stop"><i class="fa-solid fa-stop"></i></button>
+                <button type="submit" id="send-btn" title="Send"><i class="fa-solid fa-paper-plane"></i></button>
+            </form>
+        </div>
+        <footer class="hint">Press <strong>Enter</strong> to send &middot; <strong>Shift+Enter</strong> for a new line</footer>
     </div>
     <script>
         const chat = document.getElementById('chat');
         const form = document.getElementById('chat-form');
         const input = document.getElementById('user-input');
+        const sendBtn = document.getElementById('send-btn');
+        const stopBtn = document.getElementById('stop-btn');
+        const charCounter = document.getElementById('char-counter');
+        const themeToggle = document.getElementById('theme-toggle');
+        const restartBtn = document.getElementById('restart-btn');
+        const scrollBtn = document.getElementById('scroll-bottom-btn');
+        const unreadBadge = document.getElementById('unread-badge');
+        const stepperEl = document.getElementById('stepper');
+        const connDot = document.getElementById('conn-dot');
+        const connText = document.getElementById('conn-text');
+        const confirmModal = document.getElementById('confirm-modal');
+        const modalCancel = document.getElementById('modal-cancel');
+        const modalConfirm = document.getElementById('modal-confirm');
+        const shortcutsBtn = document.getElementById('shortcuts-btn');
+        const shortcutsModal = document.getElementById('shortcuts-modal');
+        const shortcutsClose = document.getElementById('shortcuts-close');
+        const MAX_LEN = 4000;
+        let sending = false;
+        let abortController = null;
+        let lastUserText = '';
+        let unreadCount = 0;
 
-        function addMessage(role, text) {
-            const msgDiv = document.createElement('div');
-            msgDiv.className = 'message ' + role;
-            const bubble = document.createElement('div');
-            bubble.className = 'bubble';
-            bubble.innerHTML = text;
-            msgDiv.appendChild(bubble);
-            chat.appendChild(msgDiv);
-            chat.scrollTop = chat.scrollHeight;
+        // --- Theme handling ---
+        function applyTheme(theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+            themeToggle.innerHTML = theme === 'dark'
+                ? '<i class="fa-solid fa-sun"></i>'
+                : '<i class="fa-solid fa-moon"></i>';
+            localStorage.setItem('recipe-theme', theme);
+        }
+        applyTheme(localStorage.getItem('recipe-theme') || 'light');
+        themeToggle.addEventListener('click', () => {
+            const current = document.documentElement.getAttribute('data-theme');
+            applyTheme(current === 'dark' ? 'light' : 'dark');
+        });
+
+        // --- Custom confirm modal (replaces native confirm()) ---
+        function openModal() { confirmModal.classList.add('show'); }
+        function closeModal() { confirmModal.classList.remove('show'); }
+        restartBtn.addEventListener('click', openModal);
+        modalCancel.addEventListener('click', closeModal);
+        modalConfirm.addEventListener('click', () => {
+            sessionStorage.removeItem('recipe-transcript');
+            fetch('/reset', { method: 'POST' }).finally(() => location.reload());
+        });
+        confirmModal.addEventListener('click', (e) => { if (e.target === confirmModal) closeModal(); });
+
+        // --- Keyboard shortcuts modal ---
+        function openShortcuts() { shortcutsModal.classList.add('show'); }
+        function closeShortcuts() { shortcutsModal.classList.remove('show'); }
+        shortcutsBtn.addEventListener('click', openShortcuts);
+        shortcutsClose.addEventListener('click', closeShortcuts);
+        shortcutsModal.addEventListener('click', (e) => { if (e.target === shortcutsModal) closeShortcuts(); });
+
+        // --- Global keyboard shortcuts ---
+        document.addEventListener('keydown', (e) => {
+            const isTypingElsewhere = document.activeElement && document.activeElement !== input &&
+                (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA');
+            if (e.key === '/' && document.activeElement !== input && !isTypingElsewhere) {
+                e.preventDefault();
+                input.focus();
+            } else if (e.key === 'Escape') {
+                if (shortcutsModal.classList.contains('show')) closeShortcuts();
+                else if (confirmModal.classList.contains('show')) closeModal();
+                else if (document.activeElement === input && input.value) {
+                    input.value = '';
+                    charCounter.textContent = '0/' + MAX_LEN;
+                    autoResize();
+                }
+            } else if (e.key === 'ArrowUp' && document.activeElement === input && !input.value && lastUserText) {
+                e.preventDefault();
+                input.value = lastUserText;
+                autoResize();
+                charCounter.textContent = input.value.length + '/' + MAX_LEN;
+            } else if (e.key === '?' && document.activeElement !== input) {
+                openShortcuts();
+            }
+        });
+
+        // --- Toasts ---
+        function showToast(message, type) {
+            const container = document.getElementById('toast-container');
+            const toast = el('div', { className: 'toast' + (type ? ' ' + type : '') });
+            const icon = type === 'error' ? 'fa-circle-exclamation' : (type === 'success' ? 'fa-circle-check' : 'fa-circle-info');
+            toast.innerHTML = '<i class="fa-solid ' + icon + '"></i> <span></span>';
+            toast.querySelector('span').textContent = message;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.classList.add('fade-out');
+                setTimeout(() => toast.remove(), 250);
+            }, 3200);
         }
 
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const userText = input.value.trim();
-            if (!userText) return;
-            addMessage('user', userText);
-            input.value = '';
-            addMessage('assistant', '<i class="fa fa-spinner fa-spin"></i>');
+        // --- Online/offline connection status ---
+        function updateConnStatus() {
+            const online = navigator.onLine;
+            connDot.classList.toggle('offline', !online);
+            connText.textContent = online ? 'Online' : 'Offline';
+        }
+        window.addEventListener('online', () => { updateConnStatus(); showToast('Back online', 'success'); });
+        window.addEventListener('offline', () => { updateConnStatus(); showToast('You are offline', 'error'); });
+        updateConnStatus();
+
+        // --- Progress stepper ---
+        const STAGES = [
+            { key: 'ingredients', label: 'Ingredients', icon: 'fa-carrot' },
+            { key: 'recipes', label: 'Recipes', icon: 'fa-list' },
+            { key: 'selection', label: 'Selection', icon: 'fa-hand-pointer' },
+            { key: 'modify', label: 'Customize', icon: 'fa-sliders' },
+            { key: 'final', label: 'Final Recipe', icon: 'fa-utensils' },
+        ];
+        let currentStageIndex = 0;
+        function renderStepper() {
+            stepperEl.innerHTML = '';
+            STAGES.forEach((stage, idx) => {
+                const stepDiv = el('div', { className: 'step' + (idx === currentStageIndex ? ' active' : idx < currentStageIndex ? ' done' : '') });
+                const dot = el('div', { className: 'step-dot' });
+                dot.innerHTML = idx < currentStageIndex ? '<i class="fa-solid fa-check"></i>' : String(idx + 1);
+                const label = el('span', { className: 'step-label', text: stage.label });
+                stepDiv.appendChild(dot);
+                stepDiv.appendChild(label);
+                stepperEl.appendChild(stepDiv);
+                if (idx < STAGES.length - 1) {
+                    stepperEl.appendChild(el('div', { className: 'connector' + (idx < currentStageIndex ? ' done' : '') }));
+                }
+            });
+        }
+        function setStage(idx) {
+            if (idx <= currentStageIndex) return;
+            currentStageIndex = idx;
+            renderStepper();
+        }
+        renderStepper();
+
+        // --- Auto-resize textarea + char counter ---
+        function autoResize() {
+            input.style.height = 'auto';
+            input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+        }
+        input.addEventListener('input', () => {
+            if (input.value.length > MAX_LEN) input.value = input.value.slice(0, MAX_LEN);
+            charCounter.textContent = input.value.length + '/' + MAX_LEN;
+            autoResize();
+        });
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                form.dispatchEvent(new Event('submit', { cancelable: true }));
+            }
+        });
+
+        function el(tag, opts) {
+            const node = document.createElement(tag);
+            opts = opts || {};
+            if (opts.className) node.className = opts.className;
+            if (opts.text !== undefined) node.textContent = opts.text;
+            return node;
+        }
+
+        function timeNow() {
+            return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
+        // --- Scroll handling: auto-follow, show "jump to bottom" when scrolled up ---
+        function isNearBottom() {
+            return chat.scrollHeight - chat.scrollTop - chat.clientHeight < 80;
+        }
+        function scrollToBottom(force) {
+            if (force || isNearBottom()) {
+                chat.scrollTop = chat.scrollHeight;
+                unreadCount = 0;
+                unreadBadge.style.display = 'none';
+                scrollBtn.classList.remove('show');
+            }
+        }
+        chat.addEventListener('scroll', () => {
+            if (isNearBottom()) {
+                scrollBtn.classList.remove('show');
+                unreadCount = 0;
+                unreadBadge.style.display = 'none';
+            }
+        });
+        scrollBtn.addEventListener('click', () => scrollToBottom(true));
+        function notifyNewMessage() {
+            if (!isNearBottom()) {
+                unreadCount += 1;
+                unreadBadge.textContent = String(unreadCount);
+                unreadBadge.style.display = 'block';
+                scrollBtn.classList.add('show');
+            } else {
+                chat.scrollTop = chat.scrollHeight;
+            }
+        }
+
+        function addBubble(role, wide) {
+            const wasNearBottom = isNearBottom();
+            const msgDiv = el('div', { className: 'message ' + role });
+            const avatar = el('div', { className: 'avatar' });
+            avatar.innerHTML = role === 'user' ? '<i class="fa-solid fa-user"></i>' : '<i class="fa-solid fa-robot"></i>';
+            const col = el('div', { className: 'msg-col' });
+            const bubble = el('div', { className: 'bubble' + (wide ? ' wide' : '') });
+            const stamp = el('div', { className: 'timestamp', text: timeNow() });
+            col.appendChild(bubble);
+            col.appendChild(stamp);
+            if (role === 'user') {
+                msgDiv.appendChild(col);
+                msgDiv.appendChild(avatar);
+            } else {
+                msgDiv.appendChild(avatar);
+                msgDiv.appendChild(col);
+            }
+            chat.appendChild(msgDiv);
+            if (wasNearBottom) chat.scrollTop = chat.scrollHeight;
+            else notifyNewMessage();
+            return bubble;
+        }
+
+        function addMsgActions(bubble, text, retryFn, role) {
+            const col = bubble.parentElement;
+            const actions = el('div', { className: 'msg-actions' });
+            const copyBtn = el('button', { text: '' });
+            copyBtn.innerHTML = '<i class="fa-regular fa-copy"></i> Copy';
+            copyBtn.type = 'button';
+            copyBtn.addEventListener('click', () => {
+                navigator.clipboard.writeText(text).then(() => showToast('Copied to clipboard', 'success'));
+            });
+            actions.appendChild(copyBtn);
+            if (retryFn) {
+                const retryBtn = el('button', { className: 'retry-btn' });
+                retryBtn.innerHTML = '<i class="fa-solid fa-rotate-right"></i> Retry';
+                retryBtn.type = 'button';
+                retryBtn.addEventListener('click', retryFn);
+                actions.appendChild(retryBtn);
+            }
+            if (role === 'assistant') {
+                const upBtn = el('button', { title: 'Helpful' });
+                upBtn.innerHTML = '<i class="fa-regular fa-thumbs-up"></i>';
+                upBtn.type = 'button';
+                const downBtn = el('button', { title: 'Not helpful' });
+                downBtn.innerHTML = '<i class="fa-regular fa-thumbs-down"></i>';
+                downBtn.type = 'button';
+                const react = (btn, other, label) => {
+                    const already = btn.classList.contains('reacted');
+                    upBtn.classList.remove('reacted');
+                    downBtn.classList.remove('reacted');
+                    if (!already) {
+                        btn.classList.add('reacted');
+                        showToast(label, 'success');
+                    }
+                };
+                upBtn.addEventListener('click', () => react(upBtn, downBtn, 'Thanks for the feedback! 🎉'));
+                downBtn.addEventListener('click', () => react(downBtn, upBtn, "Thanks — I'll try to do better."));
+                actions.appendChild(upBtn);
+                actions.appendChild(downBtn);
+            }
+            col.appendChild(actions);
+        }
+
+        // --- Minimal, safe markdown-lite renderer for assistant text -----
+        // Escapes HTML first (so LLM output can never inject markup), then
+        // layers on a handful of common conventions (bold/italic/links/
+        // bullet lists/line breaks) so recipe tips and notes read nicely
+        // instead of as a wall of plain text.
+        function escapeHtml(str) {
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+        function renderMarkdownLite(text) {
+            let safe = escapeHtml(text);
+            safe = safe.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+            safe = safe.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+            safe = safe.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+            const lines = safe.split('\n');
+            let html = '';
+            let inList = false;
+            lines.forEach((line) => {
+                const bullet = /^\s*[-*]\s+(.*)$/.exec(line);
+                if (bullet) {
+                    if (!inList) { html += '<ul class="md-list">'; inList = true; }
+                    html += '<li>' + bullet[1] + '</li>';
+                } else {
+                    if (inList) { html += '</ul>'; inList = false; }
+                    html += (html ? '<br>' : '') + line;
+                }
+            });
+            if (inList) html += '</ul>';
+            return html;
+        }
+
+        // Reveal assistant text progressively for a livelier "typing" feel.
+        function typeText(bubble, text, done) {
+            bubble.textContent = '';
+            const chars = Array.from(text);
+            let i = 0;
+            const step = Math.max(1, Math.ceil(chars.length / 120));
+            function tick() {
+                i += step;
+                bubble.textContent = chars.slice(0, i).join('');
+                if (isNearBottom()) chat.scrollTop = chat.scrollHeight;
+                if (i < chars.length) {
+                    requestAnimationFrame(tick);
+                } else {
+                    bubble.innerHTML = renderMarkdownLite(text);
+                    if (done) done();
+                }
+            }
+            requestAnimationFrame(tick);
+        }
+
+        function addTextMessage(role, text, opts) {
+            opts = opts || {};
+            const bubble = addBubble(role, false);
+            if (opts.error) bubble.classList.add('error-bubble');
+            if (role === 'assistant' && !opts.error && !opts.noAnimate) {
+                typeText(bubble, text, () => addMsgActions(bubble, text, opts.retry, role));
+            } else if (role === 'assistant') {
+                bubble.innerHTML = renderMarkdownLite(text);
+                addMsgActions(bubble, text, opts.retry, role);
+            } else {
+                bubble.textContent = text;
+                addMsgActions(bubble, text, opts.retry, role);
+            }
+            return bubble;
+        }
+
+        // Rotating contextual status line shown beneath the typing dots so
+        // the wait feels purposeful rather than a generic spinner.
+        const THINKING_PHRASES = {
+            0: ['🥕 Reading your ingredients...', '🧂 Noting your preferences...'],
+            1: ['👨‍🍳 Dreaming up recipe ideas...', '📋 Putting together some options...'],
+            2: ['✅ Locking in your choice...', '🔍 Pulling up the details...'],
+            3: ['🎛️ Applying your changes...', '✏️ Adjusting the recipe...'],
+            4: ['📊 Crunching nutrition numbers...', '🍽️ Finalizing your recipe...'],
+        };
+        function addTypingIndicator() {
+            const bubble = addBubble('assistant', false);
+            bubble.innerHTML = '<span class="typing-dots"><span></span><span></span><span></span></span>' +
+                '<div class="typing-status"></div>';
+            const phrases = THINKING_PHRASES[currentStageIndex] || ['🤔 Thinking...'];
+            const statusEl = bubble.querySelector('.typing-status');
+            let idx = 0;
+            statusEl.textContent = phrases[0];
+            const timer = setInterval(() => {
+                idx = (idx + 1) % phrases.length;
+                statusEl.textContent = phrases[idx];
+            }, 1700);
+            bubble._thinkingTimer = timer;
+            return bubble;
+        }
+
+        // --- Contextual quick-reply chips shown after assistant messages ---
+        function addQuickReplies(options) {
+            const row = el('div', { className: 'quick-replies' });
+            options.forEach((opt) => {
+                const chip = el('span', { className: 'chip', text: opt });
+                chip.addEventListener('click', () => {
+                    if (sending) return;
+                    row.remove();
+                    input.value = opt;
+                    autoResize();
+                    form.dispatchEvent(new Event('submit', { cancelable: true }));
+                });
+                row.appendChild(chip);
+            });
+            chat.appendChild(row);
+            notifyNewMessage();
+        }
+
+        function inferQuickReplies({ hasRecipes, hasFinal, message }) {
+            if (hasFinal) {
+                return ["Start a new recipe 🍽", "Give feedback"];
+            }
+            if (hasRecipes) {
+                return ["Show me more options", "None of these, try again"];
+            }
+            const lower = (message || '').toLowerCase();
+            if (lower.includes('modif') || lower.includes('change anything')) {
+                return ["No changes, looks perfect", "Make it healthier", "Make it spicier"];
+            }
+            if (lower.includes('feedback') || lower.includes('rate')) {
+                return ["👍 Loved it!", "👎 Not for me"];
+            }
+            return null;
+        }
+
+        function buildNutritionGrid(nutrition) {
+            if (!nutrition || typeof nutrition !== 'object') return null;
+            const grid = el('div', { className: 'nutrition-grid' });
+            const labels = {
+                calories: 'Calories', protein: 'Protein', fat: 'Fat',
+                carbs: 'Carbs', fiber: 'Fiber', sodium: 'Sodium'
+            };
+            let any = false;
+            Object.keys(nutrition).forEach((key) => {
+                any = true;
+                const item = el('div', { className: 'nutrition-item' });
+                const label = el('span', { className: 'label', text: labels[key] || key });
+                const value = el('span', { className: 'value', text: String(nutrition[key]) });
+                item.appendChild(label);
+                item.appendChild(value);
+                grid.appendChild(item);
+            });
+            return any ? grid : null;
+        }
+
+        function buildList(items) {
+            const ul = el('ul');
+            items.forEach((item) => {
+                const li = el('li', { text: item });
+                ul.appendChild(li);
+            });
+            return ul;
+        }
+
+        function buildRecipeCard(entry, onSelect) {
+            const card = el('div', { className: 'recipe-card' });
+
+            const titleRow = el('div', { className: 'card-title' });
+            if (entry.number !== undefined) {
+                titleRow.appendChild(el('span', { className: 'card-number', text: String(entry.number) }));
+            }
+            titleRow.appendChild(el('h3', { text: entry.name || 'Recipe' }));
+            card.appendChild(titleRow);
+
+            if (entry.description) {
+                card.appendChild(el('p', { className: 'card-description', text: entry.description }));
+            }
+
+            const metaRow = el('div', { className: 'meta-row' });
+            if (entry.prep_time !== undefined && entry.prep_time !== null) {
+                metaRow.appendChild(el('span', { className: 'meta-pill', text: '⏱ Prep ' + entry.prep_time + ' min' }));
+            }
+            if (entry.cook_time !== undefined && entry.cook_time !== null) {
+                metaRow.appendChild(el('span', { className: 'meta-pill', text: '🍳 Cook ' + entry.cook_time + ' min' }));
+            }
+            if (entry.servings !== undefined && entry.servings !== null) {
+                metaRow.appendChild(el('span', { className: 'meta-pill', text: '🍽 Serves ' + entry.servings }));
+            }
+            if (metaRow.childNodes.length) card.appendChild(metaRow);
+
+            if (entry.tags && entry.tags.length) {
+                const tagRow = el('div', { className: 'meta-row' });
+                entry.tags.forEach((tag) => {
+                    tagRow.appendChild(el('span', { className: 'tag', text: tag }));
+                });
+                card.appendChild(tagRow);
+            }
+
+            if (entry.ingredients && entry.ingredients.length) {
+                const details = el('details');
+                details.appendChild(el('summary', { text: 'Ingredients' }));
+                details.appendChild(buildList(entry.ingredients));
+                card.appendChild(details);
+            }
+
+            if (entry.instructions && entry.instructions.length) {
+                const details = el('details');
+                details.appendChild(el('summary', { text: 'Instructions' }));
+                const ol = el('ol');
+                entry.instructions.forEach((step) => {
+                    ol.appendChild(el('li', { text: step }));
+                });
+                details.appendChild(ol);
+                card.appendChild(details);
+            }
+
+            if (entry.nutrition_profile) {
+                const details = el('details');
+                details.appendChild(el('summary', { text: 'Nutrition' }));
+                const grid = buildNutritionGrid(entry.nutrition_profile);
+                if (grid) details.appendChild(grid);
+                if (entry.suggested_addons && entry.suggested_addons.length) {
+                    details.appendChild(el('p', { text: 'Suggested Addons:' }));
+                    details.appendChild(buildList(entry.suggested_addons));
+                }
+                if (entry.nutrition_insights && entry.nutrition_insights.length) {
+                    details.appendChild(el('p', { text: 'Insights:' }));
+                    details.appendChild(buildList(entry.nutrition_insights));
+                }
+                card.appendChild(details);
+            }
+
+            if (onSelect && entry.number !== undefined) {
+                const btn = el('button', { className: 'select-btn' });
+                btn.innerHTML = '<i class="fa-solid fa-check"></i> Select this recipe';
+                btn.type = 'button';
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.recipe-card .select-btn').forEach((b) => b.disabled = true);
+                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Selecting...';
+                    setStage(3);
+                    onSelect(entry.number);
+                });
+                card.appendChild(btn);
+            }
+
+            return card;
+        }
+
+        function addRecipeCards(recipes, onSelect) {
+            const bubble = addBubble('assistant', true);
+            bubble.style.background = 'transparent';
+            bubble.style.boxShadow = 'none';
+            bubble.style.padding = '0';
+            const grid = el('div', { className: 'recipe-grid' });
+            recipes.forEach((entry) => grid.appendChild(buildRecipeCard(entry, onSelect)));
+            bubble.appendChild(grid);
+            setStage(2);
+        }
+
+        function addFinalRecipeCard(recipe) {
+            const bubble = addBubble('assistant', true);
+            bubble.style.background = 'transparent';
+            bubble.style.boxShadow = 'none';
+            bubble.style.padding = '0';
+            const card = el('div', { className: 'final-recipe-card' });
+
+            const badge = el('span', { className: 'badge' });
+            badge.innerHTML = '<i class="fa-solid fa-circle-check"></i> Final Recipe';
+            card.appendChild(badge);
+
+            card.appendChild(el('h3', { text: recipe.name || 'Your Recipe' }));
+            if (recipe.description) {
+                card.appendChild(el('p', { className: 'card-description', text: recipe.description }));
+            }
+            const metaRow = el('div', { className: 'meta-row' });
+            if (recipe.prep_time !== undefined && recipe.prep_time !== null) {
+                metaRow.appendChild(el('span', { className: 'meta-pill', text: '⏱ Prep ' + recipe.prep_time + ' min' }));
+            }
+            if (recipe.cook_time !== undefined && recipe.cook_time !== null) {
+                metaRow.appendChild(el('span', { className: 'meta-pill', text: '🍳 Cook ' + recipe.cook_time + ' min' }));
+            }
+            if (recipe.servings !== undefined && recipe.servings !== null) {
+                metaRow.appendChild(el('span', { className: 'meta-pill', text: '🍽 Serves ' + recipe.servings }));
+            }
+            if (metaRow.childNodes.length) card.appendChild(metaRow);
+            if (recipe.ingredients && recipe.ingredients.length) {
+                card.appendChild(el('p', { text: 'Ingredients:' }));
+                card.appendChild(buildList(recipe.ingredients));
+            }
+            if (recipe.instructions && recipe.instructions.length) {
+                card.appendChild(el('p', { text: 'Instructions:' }));
+                const ol = el('ol');
+                recipe.instructions.forEach((step) => ol.appendChild(el('li', { text: step })));
+                card.appendChild(ol);
+            }
+
+            const actions = el('div', { className: 'final-actions' });
+            const copyBtn = el('button');
+            copyBtn.innerHTML = '<i class="fa-regular fa-copy"></i> Copy';
+            copyBtn.type = 'button';
+            copyBtn.addEventListener('click', () => {
+                const text = [
+                    recipe.name,
+                    recipe.description || '',
+                    'Ingredients:', ...(recipe.ingredients || []).map((i) => '- ' + i),
+                    'Instructions:', ...(recipe.instructions || []).map((s, idx) => (idx + 1) + '. ' + s),
+                ].join('\n');
+                navigator.clipboard.writeText(text).then(() => {
+                    copyBtn.innerHTML = '<i class="fa-solid fa-check"></i> Copied!';
+                    setTimeout(() => { copyBtn.innerHTML = '<i class="fa-regular fa-copy"></i> Copy'; }, 1800);
+                });
+            });
+            const printBtn = el('button');
+            printBtn.innerHTML = '<i class="fa-solid fa-print"></i> Print';
+            printBtn.type = 'button';
+            printBtn.addEventListener('click', () => window.print());
+            actions.appendChild(copyBtn);
+            actions.appendChild(printBtn);
+            card.appendChild(actions);
+
+            bubble.appendChild(card);
+            setStage(4);
+        }
+
+        function showWelcome() {
+            const bubble = addBubble('assistant', true);
+            bubble.style.background = 'transparent';
+            bubble.style.boxShadow = 'none';
+            bubble.style.padding = '0';
+            const card = el('div', { className: 'welcome-card' });
+            card.innerHTML = '<strong>👋 Welcome!</strong> Tell me what ingredients you have on hand, any dietary preferences, or cravings, and I\'ll whip up some recipe ideas for you.';
+            const row = el('div', { className: 'suggestion-row' });
+            [
+                'Chicken, rice, broccoli',
+                'Vegetarian pasta dinner',
+                'Quick 15-minute breakfast',
+                'Low-carb dinner with eggs'
+            ].forEach((s) => {
+                const chip = el('span', { className: 'chip', text: s });
+                chip.addEventListener('click', () => {
+                    input.value = s;
+                    autoResize();
+                    form.dispatchEvent(new Event('submit', { cancelable: true }));
+                });
+                row.appendChild(chip);
+            });
+            card.appendChild(row);
+            bubble.appendChild(card);
+            setStage(0);
+        }
+
+        function setSending(state) {
+            sending = state;
+            sendBtn.disabled = state;
+            input.disabled = state;
+            sendBtn.style.display = state ? 'none' : 'flex';
+            stopBtn.classList.toggle('show', state);
+        }
+
+        stopBtn.addEventListener('click', () => {
+            if (abortController) abortController.abort();
+        });
+
+        function removeTyping(bubble) {
+            if (bubble._thinkingTimer) clearInterval(bubble._thinkingTimer);
+            bubble.closest('.message').remove();
+        }
+
+        // --- Transcript persistence -------------------------------------
+        // Keeps a lightweight record of what's been said so an accidental
+        // page refresh doesn't wipe the visible conversation (the backend
+        // session/thread now also survives a refresh — see app.py).
+        let transcript = [];
+        function saveTranscript() {
+            try {
+                sessionStorage.setItem('recipe-transcript', JSON.stringify(transcript));
+            } catch (e) { /* storage full/unavailable — non-critical */ }
+        }
+        function loadTranscript() {
+            try {
+                const raw = sessionStorage.getItem('recipe-transcript');
+                return raw ? JSON.parse(raw) : null;
+            } catch (e) { return null; }
+        }
+        function replayTranscript(entries) {
+            entries.forEach((entry) => {
+                if (entry.type === 'user') {
+                    addTextMessage('user', entry.text, { noAnimate: true });
+                    lastUserText = entry.text;
+                } else if (entry.type === 'assistant') {
+                    addTextMessage('assistant', entry.text, { noAnimate: true });
+                } else if (entry.type === 'recipes') {
+                    addRecipeCards(entry.recipes, (number) => {
+                        input.value = String(number);
+                        autoResize();
+                        form.dispatchEvent(new Event('submit', { cancelable: true }));
+                    });
+                } else if (entry.type === 'final') {
+                    addFinalRecipeCard(entry.recipe);
+                }
+            });
+        }
+
+        async function sendMessage(userText) {
+            document.querySelectorAll('.quick-replies').forEach((n) => n.remove());
+            addTextMessage('user', userText, { noAnimate: true });
+            transcript.push({ type: 'user', text: userText });
+            saveTranscript();
+            lastUserText = userText;
+            setSending(true);
+            const typing = addTypingIndicator();
+            abortController = new AbortController();
             try {
                 const res = await fetch('/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: userText })
+                    body: JSON.stringify({ message: userText }),
+                    signal: abortController.signal,
                 });
+                if (!res.ok) {
+                    throw new Error('Server responded with ' + res.status);
+                }
                 const data = await res.json();
-                chat.lastChild.remove(); // Remove spinner
-                if (data.recipe_card) {
-                    addMessage('assistant', data.message + '<div class="recipe-card">' + data.recipe_card + '</div>');
-                } else {
-                    addMessage('assistant', data.message);
+                removeTyping(typing);
+
+                if (data.message) {
+                    addTextMessage('assistant', data.message, {
+                        retry: () => sendMessage(userText),
+                    });
+                    transcript.push({ type: 'assistant', text: data.message });
+                }
+                if (data.recipes && data.recipes.length) {
+                    addRecipeCards(data.recipes, (number) => {
+                        input.value = String(number);
+                        autoResize();
+                        form.dispatchEvent(new Event('submit', { cancelable: true }));
+                    });
+                    transcript.push({ type: 'recipes', recipes: data.recipes });
+                }
+                if (data.final_recipe) {
+                    addFinalRecipeCard(data.final_recipe);
+                    showToast('Your recipe is ready! 🎉', 'success');
+                    transcript.push({ type: 'final', recipe: data.final_recipe });
+                }
+                saveTranscript();
+                const replies = inferQuickReplies({
+                    hasRecipes: !!(data.recipes && data.recipes.length),
+                    hasFinal: !!data.final_recipe,
+                    message: data.message,
+                });
+                if (replies) {
+                    addQuickReplies(replies);
                 }
             } catch (err) {
-                chat.lastChild.remove();
-                addMessage('assistant', 'Sorry, there was an error.');
+                removeTyping(typing);
+                if (err.name === 'AbortError') {
+                    addTextMessage('assistant', '⏹ Generation stopped.', { noAnimate: true });
+                    showToast('Stopped', 'info');
+                } else {
+                    addTextMessage('assistant', '⚠️ Sorry, there was an error reaching the server. Please try again.', {
+                        error: true,
+                        noAnimate: true,
+                        retry: () => sendMessage(userText),
+                    });
+                    showToast('Something went wrong. Tap retry to try again.', 'error');
+                }
+            } finally {
+                setSending(false);
+                abortController = null;
+                input.focus();
             }
+        }
+
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (sending) return;
+            const userText = input.value.trim();
+            if (!userText) return;
+            input.value = '';
+            charCounter.textContent = '0/' + MAX_LEN;
+            autoResize();
+            sendMessage(userText);
         });
+
+        const restored = loadTranscript();
+        if (restored && restored.length) {
+            transcript = restored;
+            replayTranscript(restored);
+            const lastUser = [...restored].reverse().find((e) => e.type === 'user');
+            if (lastUser) lastUserText = lastUser.text;
+            showToast('Welcome back — restored your conversation', 'info');
+        } else {
+            showWelcome();
+        }
+        input.focus();
     </script>
 </body>
 </html>

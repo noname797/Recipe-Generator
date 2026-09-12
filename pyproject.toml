@@ -17,6 +17,16 @@ dependencies = [
 	"ruff>=0.13.0",
 	"langgraph>=0.6.7",
 	"flask>=3.1.2",
+	"flask-session>=0.8.0",
+	"sqlalchemy>=2.0.43",
+	"tenacity>=9.0.0",
+	"langgraph-checkpoint-sqlite>=2.0.0",
+	"markupsafe>=2.1.5",
+]
+
+[dependency-groups]
+dev = [
+	"pytest>=8.0.0",
 ]
 
 # Add any other dependencies you use in your agents or utils here

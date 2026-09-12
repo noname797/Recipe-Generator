@@ -1,178 +1,257 @@
-from flask import Flask, render_template, request, jsonify, session
+import logging
+import os
+from functools import wraps
 
-from workflow import (
-    ingredient_node,
-    chef_node,
-    nutrition_node,
-    user_selection_node,
-    user_modification_node,
-    final_recipe_node,
-    sentiment_node,
-    human_escalation_node
-)
+from dotenv import load_dotenv
+from flask import Flask, render_template, request, jsonify, session
+from flask_session import Session
+
+from workflow import start_interactive_session, resume_interactive_session, get_interrupt_prompt
 from utils.state import RecipeState
+from utils.escalation_store import list_escalations, get_escalation, resolve_escalation
+
+load_dotenv()
+
+logging.basicConfig(
+    level=os.environ.get("LOG_LEVEL", "INFO"),
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-app.secret_key = 'replace-this-with-a-secure-key'
+app.secret_key = os.environ.get("FLASK_SECRET_KEY")
+if not app.secret_key:
+    raise RuntimeError(
+        "FLASK_SECRET_KEY is not set. Add it to your .env file, e.g.\n"
+        "FLASK_SECRET_KEY=$(python -c \"import secrets; print(secrets.token_hex(32))\")"
+    )
 
-def get_user_state():
-    user_id = session.get('user_id')
-    if not user_id:
+# Store session data server-side (filesystem by default) instead of inside the
+# client-side cookie. The cookie itself only carries an opaque session id, so
+# we avoid the 4KB cookie-size limit and stop leaking recipe/user data to the
+# client. Set SESSION_TYPE=redis (with SESSION_REDIS configured) in production
+# for a more robust, horizontally-scalable backend.
+app.config["SESSION_TYPE"] = os.environ.get("SESSION_TYPE", "filesystem")
+app.config["SESSION_FILE_DIR"] = os.environ.get("SESSION_FILE_DIR", "./.flask_session")
+app.config["SESSION_PERMANENT"] = False
+Session(app)
+
+def get_thread_id():
+    """Get (or create) the LangGraph checkpoint thread id for this browser session.
+
+    Kept for any external callers, but `/chat` now manages `thread_id`
+    directly to avoid implicitly creating a thread id before a graph run has
+    actually been started for it.
+    """
+    thread_id = session.get('thread_id')
+    if not thread_id:
         import uuid
-        user_id = str(uuid.uuid4())
-        session['user_id'] = user_id
-    if 'user_states' not in session:
-        session['user_states'] = {}
-    user_states = session['user_states']
-    if user_id not in user_states:
-        user_states[user_id] = RecipeState().model_dump()
-    return RecipeState(**user_states[user_id])
-
-def save_user_state(state):
-    user_id = session.get('user_id')
-    if not user_id:
-        return
-    if 'user_states' not in session:
-        session['user_states'] = {}
-    user_states = session['user_states']
-    user_states[user_id] = state.model_dump()
-    session['user_states'] = user_states
+        thread_id = str(uuid.uuid4())
+        session['thread_id'] = thread_id
+    return thread_id
 
 @app.route('/')
 def index():
-    session["step"] = None
+    # Note: we deliberately do NOT clear the session here. Doing so used to
+    # wipe an in-progress conversation on every page refresh, which is a
+    # jarring UX regression (users lose all progress just from reloading the
+    # tab). The frontend persists a lightweight transcript in
+    # sessionStorage and, combined with the still-alive server-side thread,
+    # can seamlessly restore the chat. Use the explicit `/reset` endpoint
+    # (wired to the "Start Over" button) to intentionally clear state.
     return render_template('index.html')
 
 
-# Step order for the workflow
-WORKFLOW_STEPS = [
-    'ingredient',
-    'chef',
-    'nutrition',
-    'user_selection',
-    'user_modification',
-    'final_recipe',
-    'sentiment',
-    'human_escalation',
-]
+@app.route('/reset', methods=['POST'])
+def reset():
+    """Explicitly clear the current conversation. Called by the "Start Over"
+    button so a page refresh alone never destroys progress, but the user can
+    still deliberately start fresh."""
+    session.pop('thread_id', None)
+    session['started'] = False
+    return jsonify({'status': 'reset'})
 
-def get_next_step(state, current_step):
-    idx = WORKFLOW_STEPS.index(current_step)
-    # Sentiment escalation logic
-    if current_step == 'sentiment' and hasattr(state, 'sentiment_escalation'):
-        if getattr(state.sentiment_escalation, 'escalation_required', False):
-            return 'human_escalation'
-        else:
-            return None
-    if idx + 1 < len(WORKFLOW_STEPS):
-        return WORKFLOW_STEPS[idx + 1]
-    return None
+
+
+def _message_for_interrupt(payload):
+    """Turn an interrupt() payload dict into (message, recipes) for the
+    client. Rather than pre-rendering an HTML blob server-side, we hand back
+    the plain prompt text and the raw recipe data; the frontend renders the
+    recipes as proper cards using safe DOM APIs (textContent), which also
+    sidesteps any HTML-escaping edge cases entirely.
+    """
+    if not isinstance(payload, dict):
+        return str(payload), None
+    message = payload.get("prompt", "Input required")
+    recipes = payload.get("recipes")
+    return message, recipes
+
 
 @app.route('/chat', methods=['POST'])
-
 def chat():
-    data = request.get_json()
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'message': 'Invalid request body; expected JSON object.'}), 400
+
     user_input = data.get('message', '')
-    state = get_user_state()
-    step = session.get('step')
-    
-    if not step:
-        step = 'ingredient'
+    if not isinstance(user_input, str):
+        return jsonify({'message': 'Field "message" must be a string.'}), 400
+    user_input = user_input.strip()
+    if len(user_input) > 4000:
+        return jsonify({'message': 'Message is too long (max 4000 characters).'}), 400
+
+    thread_id = session.get('thread_id')
+    started = session.get('started', False)
 
     message = ""
     recipe_card = None
+    recipes = None
+    final_recipe = None
 
-    while True:
-        if step == 'ingredient':
-            state = ingredient_node(state, user_input)
-            message = "Ingredients received! Generating recipes..."
-            step = 'chef'
-            user_input = ''  # Clear user input for next step
-        elif step == 'chef':
-            state = chef_node(state)
-            step = 'nutrition'
-        elif step == 'nutrition':
-            state = nutrition_node(state)
-            message = "Here are some recipe suggestions. Please select a recipe by number."
-            recipe_list = "<ul>"
-            for idx, recipe in enumerate(state.chef_output.recipes, 1):
-                recipe_list += f"<li><b>{idx}.</b> <b>{recipe.name}</b><br>"
-                recipe_list += f"Description: {recipe.description}<br>"
-                recipe_list += f"Ingredients: {', '.join(recipe.ingredients)}<br>"
-                recipe_list += "Instructions:<ol>"
-                for step_idx, instruction in enumerate(recipe.instructions, 1):
-                    recipe_list += f"<li> {step_idx}. {instruction}</li>"
-                recipe_list += "</ol>"
-                recipe_list += f"Prep Time: {getattr(recipe, 'prep_time', 'N/A')}<br>"
-                recipe_list += f"Cook Time: {getattr(recipe, 'cook_time', 'N/A')}<br>"
-                recipe_list += f"Servings: {getattr(recipe, 'servings', 'N/A')}<br>"
-                if getattr(recipe, 'tags', None):
-                    recipe_list += f"Tags: {', '.join(recipe.tags)}<br>"
-                if state.nutrition_info:
-                    recipe_list += f"Nutrition: {state.nutrition_info.recipes[idx-1].nutrition_profile}<br>"
-                    recipe_list += f"Suggested Addons: {state.nutrition_info.recipes[idx-1].suggested_addons}<br>"
-                    recipe_list += f"Insights: {state.nutrition_info.recipes[idx-1].nutrition_insights}<br>"
-                recipe_list += "</li>"
-            recipe_list += "</ul>"
-
-            message += recipe_list
-            step = 'user_selection'
-            break  # Wait for user modification input
-
-        elif step == 'user_selection':
-            try:
-                choice = int(user_input)
-                if 1 <= choice <= len(state.chef_output.recipes):
-                    state.selected_recipe = state.chef_output.recipes[choice - 1]
-                    state.selected_nutrition_info = state.nutrition_info.recipes[choice - 1] if state.nutrition_info else None
-                    message = f"You selected: {state.selected_recipe.name}. Would you like to modify the recipe? (e.g., reduce salt, swap an ingredient, adjust nutrition) If yes, type your modification. If not, type 'no'."
-                    step = 'user_modification'
-                    break  # Wait for user modification input
-                else:
-                    message = f"Please enter a number between 1 and {len(state.chef_output.recipes)}."
-                    break
-            except Exception:
-                message = "Invalid input. Please enter a valid number."
-                break
-        elif step == 'user_modification':
-            if user_input.strip().lower() == 'no':
-                message = "Finalizing recipe..."
-                step = 'final_recipe'
-                user_input = ''
-            else:
-                state = user_modification_node(state, user_input)
-                message = "Modification applied. Finalizing recipe..."
-                step = 'final_recipe'
-                user_input = ''
-        elif step == 'final_recipe':
-            state = final_recipe_node(state)
-            recipe = state.final_recipe
-            recipe_card = f"<b>{recipe.name}</b><br>Description: {recipe.description}<br>Ingredients: {', '.join(recipe.ingredients)}<br>Instructions: {' '.join(recipe.instructions)}"
-            message = "Here is your final recipe! How do you feel about your experience? (Optional feedback for sentiment analysis)"
-            step = 'sentiment'
-            break  # Wait for user feedback
-        elif step == 'sentiment':
-            state = sentiment_node(state, user_input)
-            if hasattr(state, 'sentiment_escalation') and getattr(state.sentiment_escalation, 'escalation_required', False):
-                message = "It seems you need human assistance. Escalating..."
-                step = 'human_escalation'
-                user_input = ''
-            else:
-                message = "Thank you for your feedback! Enjoy your meal!"
-                step = 'ingredient'  # Restart for new session
-                break
-        elif step == 'human_escalation':
-            state = human_escalation_node(state)
-            message = "A human will review your request. Thank you!"
-            step = 'ingredient'  # Restart for new session
-            break
+    try:
+        if not started:
+            # First message of a new conversation: explicitly start a fresh
+            # graph run (rather than starting-and-resuming in one step) so a
+            # failure here can't leave `started` unset while a `thread_id`
+            # has already been assigned/persisted.
+            thread_id, result = start_interactive_session()
+            session['thread_id'] = thread_id
+            session['started'] = True
         else:
-            message = "Sorry, something went wrong."
-            break
+            if not thread_id:
+                # Defensive: `started` was set but the thread id is missing
+                # (e.g. session storage was cleared out-of-band). Restart
+                # cleanly rather than calling resume with no thread_id.
+                thread_id, result = start_interactive_session()
+                session['thread_id'] = thread_id
+            else:
+                result = resume_interactive_session(thread_id, user_input)
 
-    save_user_state(state)
-    session['step'] = step
-    return jsonify({'message': message, 'recipe_card': recipe_card})
+        if "__interrupt__" in result:
+            payload = get_interrupt_prompt(result)
+            message, recipes = _message_for_interrupt(payload)
+        else:
+            # Graph reached END: final recipe (and possibly escalation) done.
+            state = RecipeState(**result)
+            recipe = state.final_recipe
+            final_recipe = {
+                "name": recipe.name,
+                "description": recipe.description,
+                "ingredients": recipe.ingredients,
+                "instructions": recipe.instructions,
+                "prep_time": getattr(recipe, "prep_time", None),
+                "cook_time": getattr(recipe, "cook_time", None),
+                "servings": getattr(recipe, "servings", None),
+                "tags": getattr(recipe, "tags", None),
+            }
+            # Kept for older clients: a plain-text fallback rendering of the
+            # final recipe (no HTML). Modern clients should prefer the
+            # structured `final_recipe` field above.
+            recipe_card = (
+                f"{recipe.name}\nDescription: {recipe.description}\n"
+                f"Ingredients: {', '.join(recipe.ingredients)}\n"
+                f"Instructions: {' '.join(recipe.instructions)}"
+            )
+            if getattr(state, "sentiment_escalation", None) and state.sentiment_escalation.escalation_required:
+                message = "It seems you need human assistance. A human will review your request shortly. Thank you!"
+            else:
+                message = "Here is your final recipe! Thank you for your feedback. Enjoy your meal!"
+            # Reset for a new conversation on the next message.
+            session.pop('thread_id', None)
+            session['started'] = False
+    except ValueError as e:
+        # Expected, user-facing validation errors (e.g. bad recipe number).
+        # The graph node already raised before mutating state, so the
+        # in-progress checkpoint is unaffected; the same interrupt will be
+        # re-presented on the next call once the user retries.
+        message = str(e)
+    except Exception:
+        logger.exception("Unhandled error while processing chat message for thread %s", thread_id)
+        message = (
+            "Sorry, something went wrong on our end while processing that. "
+            "Please try again."
+        )
+
+    return jsonify({
+        'message': str(message),
+        'recipe_card': recipe_card,
+        'recipes': recipes,
+        'final_recipe': final_recipe,
+    })
+
+
+
+# --- Human reviewer endpoints -------------------------------------------------
+# Simple JSON API for a human operator to see and act on escalated sessions.
+# Protected by a static API key (set via the `ESCALATION_API_KEY` env var),
+# expected in the `X-API-Key` request header. This is intentionally minimal;
+# swap in a proper auth scheme (OAuth/JWT/etc.) before exposing these routes
+# beyond a trusted internal network.
+
+def require_escalation_api_key(view_func):
+    @wraps(view_func)
+    def wrapped(*args, **kwargs):
+        expected_key = os.environ.get("ESCALATION_API_KEY")
+        if not expected_key:
+            logger.error(
+                "ESCALATION_API_KEY is not configured; refusing escalation "
+                "API request. Set ESCALATION_API_KEY in your .env to enable "
+                "this endpoint."
+            )
+            return jsonify({'error': 'Escalation API is not configured'}), 503
+        provided_key = request.headers.get("X-API-Key", "")
+        if not provided_key or provided_key != expected_key:
+            return jsonify({'error': 'Unauthorized'}), 401
+        return view_func(*args, **kwargs)
+
+    return wrapped
+
+
+@app.route('/escalations', methods=['GET'])
+@require_escalation_api_key
+def get_escalations():
+    include_resolved = request.args.get('include_resolved', 'false').lower() == 'true'
+    records = list_escalations(include_resolved=include_resolved)
+    return jsonify([
+        {
+            'id': r.id,
+            'created_at': r.created_at.isoformat(),
+            'sentiment': r.sentiment,
+            'human_notes': r.human_notes,
+            'resolved': r.resolved,
+            'resolution_notes': r.resolution_notes,
+        }
+        for r in records
+    ])
+
+
+@app.route('/escalations/<escalation_id>', methods=['GET'])
+@require_escalation_api_key
+def get_escalation_detail(escalation_id):
+    record = get_escalation(escalation_id)
+    if record is None:
+        return jsonify({'error': 'Escalation not found'}), 404
+    return jsonify({
+        'id': record.id,
+        'created_at': record.created_at.isoformat(),
+        'sentiment': record.sentiment,
+        'human_notes': record.human_notes,
+        'resolved': record.resolved,
+        'resolution_notes': record.resolution_notes,
+        'state_snapshot': record.state_snapshot,
+    })
+
+
+@app.route('/escalations/<escalation_id>/resolve', methods=['POST'])
+@require_escalation_api_key
+def resolve_escalation_route(escalation_id):
+    data = request.get_json(silent=True) or {}
+    notes = data.get('resolution_notes')
+    updated = resolve_escalation(escalation_id, resolution_notes=notes)
+    if not updated:
+        return jsonify({'error': 'Escalation not found'}), 404
+    return jsonify({'status': 'resolved', 'id': escalation_id})
+
 
 if __name__ == '__main__':
     app.run(debug=True)
