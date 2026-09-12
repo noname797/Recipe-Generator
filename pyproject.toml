@@ -1,0 +1,25 @@
+[project]
+name = "recipe-generator"
+version = "0.1.0"
+description = "A multi-agent system for generating recipes based on user input."
+authors = ["Sarvesh <sarvesh797@gmail.com>"]
+requires-python = ">=3.12"
+dependencies = [
+	"openai",
+	"pydantic",
+	"requests",
+	"boto3",
+	"dotenv>=0.9.9",
+	"pyyaml>=6.0.2",
+	"langchain-aws>=0.2.32",
+	"langchain-core>=0.3.76",
+	"langchain>=0.3.27",
+	"ruff>=0.13.0",
+	"langgraph>=0.6.7",
+	"flask>=3.1.2",
+]
+
+# Add any other dependencies you use in your agents or utils here
+
+[tool.uv]
+# Uv-specific settings can go here if needed

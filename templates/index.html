@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recipe Generator Assistant</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #f7f7fa;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 700px;
+            margin: 40px auto;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 16px rgba(0,0,0,0.08);
+            padding: 32px 24px 24px 24px;
+        }
+        h1 {
+            text-align: center;
+            color: #3a3a4a;
+            margin-bottom: 16px;
+        }
+        #chat {
+            min-height: 320px;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 16px;
+            background: #fafbfc;
+            margin-bottom: 18px;
+        }
+        .message {
+            margin-bottom: 16px;
+            display: flex;
+            align-items: flex-start;
+        }
+        .message.user .bubble {
+            background: #e0f7fa;
+            color: #00796b;
+            margin-left: auto;
+        }
+        .message.assistant .bubble {
+            background: #ede7f6;
+            color: #4527a0;
+            margin-right: auto;
+        }
+        .bubble {
+            padding: 12px 18px;
+            border-radius: 18px;
+            max-width: 80%;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+        }
+        form {
+            display: flex;
+            gap: 10px;
+        }
+        input[type="text"] {
+            flex: 1;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            font-size: 1rem;
+        }
+        button {
+            background: #4527a0;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 20px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: #6a1b9a;
+        }
+        .recipe-card {
+            background: #f3e5f5;
+            border-radius: 10px;
+            padding: 16px;
+            margin-top: 10px;
+        }
+        .recipe-card h3 {
+            margin-top: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1><i class="fa-solid fa-utensils"></i> Recipe Generator Assistant</h1>
+        <div id="chat"></div>
+        <form id="chat-form">
+            <input type="text" id="user-input" placeholder="Type your ingredients, preferences, or questions..." autocomplete="off" required />
+            <button type="submit"><i class="fa-solid fa-paper-plane"></i></button>
+        </form>
+    </div>
+    <script>
+        const chat = document.getElementById('chat');
+        const form = document.getElementById('chat-form');
+        const input = document.getElementById('user-input');
+
+        function addMessage(role, text) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'message ' + role;
+            const bubble = document.createElement('div');
+            bubble.className = 'bubble';
+            bubble.innerHTML = text;
+            msgDiv.appendChild(bubble);
+            chat.appendChild(msgDiv);
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const userText = input.value.trim();
+            if (!userText) return;
+            addMessage('user', userText);
+            input.value = '';
+            addMessage('assistant', '<i class="fa fa-spinner fa-spin"></i>');
+            try {
+                const res = await fetch('/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: userText })
+                });
+                const data = await res.json();
+                chat.lastChild.remove(); // Remove spinner
+                if (data.recipe_card) {
+                    addMessage('assistant', data.message + '<div class="recipe-card">' + data.recipe_card + '</div>');
+                } else {
+                    addMessage('assistant', data.message);
+                }
+            } catch (err) {
+                chat.lastChild.remove();
+                addMessage('assistant', 'Sorry, there was an error.');
+            }
+        });
+    </script>
+</body>
+</html>
